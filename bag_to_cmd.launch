@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+
+<launch>
+  <node name="bag_to_cmd_node" pkg="bag_to_cmd" type="bag_to_cmd_node" output="screen">
+      <param name="bag_path" value="/home/martin/Documents/bagfiles/walking/walking_test_2.bag" />
+  </node>
+</launch>
