@@ -8,6 +8,7 @@
 boost::shared_ptr<bag_tools::BagToCmd> bag_to_cmd_ptr;
 std::mutex mtx;
 bool exiting = false;
+int frequency = 125;
 
 struct termios initial_settings;
 
@@ -25,7 +26,7 @@ void set_terminal_buffer(bool on) {
 }
 
 void update() {
-    ros::Rate rate(125);
+    ros::Rate rate(frequency);
     while (ros::ok() && !exiting) {
         mtx.lock();
         bag_to_cmd_ptr->update(0.008);
@@ -37,16 +38,28 @@ void update() {
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "bag_to_cmd_node");
-    ros::NodeHandle controller_manager_nh("/thor_mang/controller_manager");
 
     ros::NodeHandle nh("bag_to_cmd_node");
+    std::string controller_manager_ns = "";
+    nh.getParam("controller_manager_ns", controller_manager_ns);
+    ros::NodeHandle controller_manager_nh(controller_manager_ns + "/controller_manager");
+
+    nh.getParam("update_frequency", frequency);
 
     std::string bag_path = "";
     if (!nh.getParam("bag_path", bag_path)) {
         ROS_ERROR_STREAM("Coudln't find key bag_path in namespace " << nh.getNamespace());
         return 0;
     }
+
+
     bag_to_cmd_ptr.reset(new bag_tools::BagToCmd());
+
+    std::string joint_state_topic;
+    if(nh.getParam("joint_state_topic", joint_state_topic)) {
+        bag_to_cmd_ptr->setJointStateTopic(joint_state_topic);
+    }
+
     if (!bag_to_cmd_ptr->init(bag_path, controller_manager_nh)) {
         ROS_ERROR_STREAM("Initialisation of bag_to_cmd failed.");
         return 0;
@@ -62,7 +75,7 @@ int main(int argc, char** argv) {
         switch (c) {
             case ' ':
                 mtx.lock();
-                bag_to_cmd_ptr->toggle_pause();
+                bag_to_cmd_ptr->togglePause();
                 mtx.unlock();
                 break;
             case 's':
@@ -77,7 +90,7 @@ int main(int argc, char** argv) {
                 break;
             case 'z':
                 mtx.lock();
-                bag_to_cmd_ptr->send_zero();
+                bag_to_cmd_ptr->sendZero();
                 mtx.unlock();
                 break;
             case 'e':

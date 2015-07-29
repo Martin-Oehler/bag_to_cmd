@@ -3,7 +3,8 @@
 namespace bag_tools {
 
 BagToCmd::BagToCmd() :
-    state_(UNINITIALIZED){
+    state_(UNINITIALIZED),
+    joint_state_topic_("/joint_states"){
 
 }
 
@@ -40,7 +41,7 @@ bool BagToCmd::init(std::string bag_path, ros::NodeHandle &controller_manager_nh
 
 
     bag_.open(bag_path, rosbag::bagmode::Read);
-    view_ptr_.reset(new rosbag::View(bag_, rosbag::TopicQuery("/joint_states")));
+    view_ptr_.reset(new rosbag::View(bag_, rosbag::TopicQuery(joint_state_topic_)));
 
 
     sensor_msgs::JointStateConstPtr joint_state_ptr;
@@ -93,7 +94,7 @@ void BagToCmd::start() {
 
     sensor_msgs::JointStateConstPtr joint_state_ptr = bag_it_->instantiate<sensor_msgs::JointState>();
     for (unsigned int i = 0; i < controllers_.size(); i++) {
-        send_cmd(controllers_[i], joint_state_ptr->position, 2);
+        sendCmd(controllers_[i], joint_state_ptr->position, 2);
     }
     ros::Duration(2.0).sleep();
     state_ = RUNNING;
@@ -109,7 +110,7 @@ bool BagToCmd::update(double period) {
         if (joint_state_ptr != NULL) {
             //ROS_INFO_STREAM("Next timestamp: " << joint_state_ptr->header.stamp.toNSec());
             for (unsigned int i = 0; i < controllers_.size(); i++) {
-                send_cmd(controllers_[i], joint_state_ptr->position);
+                sendCmd(controllers_[i], joint_state_ptr->position);
             }
         }
         bag_it_++;
@@ -136,7 +137,7 @@ void BagToCmd::deinit() {
     state_ = UNINITIALIZED;
 }
 
-void BagToCmd::send_cmd(controller_type &controller, const std::vector<double>& positions, double duration) {
+void BagToCmd::sendCmd(controller_type &controller, const std::vector<double>& positions, double duration) {
     trajectory_msgs::JointTrajectory joint_traj;
     //joint_traj.header.stamp = ros::Time::now();
 
@@ -144,7 +145,15 @@ void BagToCmd::send_cmd(controller_type &controller, const std::vector<double>& 
     trajectory_msgs::JointTrajectoryPoint point;
     std::vector<double> msg_positions;
     for (unsigned int i = 0; i < controller.resources.size(); i++) {
-        msg_positions.push_back(positions[joint_to_ndx_[controller.resources[i]]]);
+        double position;
+
+        try {
+            position = positions[joint_to_ndx_.at(controller.resources[i])];
+        } catch (const std::out_of_range& err) {
+            ROS_WARN_STREAM_THROTTLE(1, "Could not find joint" << controller.resources[i] << "in joint state. Sending zero.");
+            position = 0;
+        }
+        msg_positions.push_back(position);
     }
     std::stringstream debug;
     for (unsigned int i = 0; i < msg_positions.size(); i++) {
@@ -155,21 +164,21 @@ void BagToCmd::send_cmd(controller_type &controller, const std::vector<double>& 
     point.time_from_start = ros::Duration(duration);
     joint_traj.points.push_back(point);
 
-    controller_publishers_[controller.name].publish(joint_traj);
+    controller_publishers_.at(controller.name).publish(joint_traj);
 }
 
-void BagToCmd::send_cmd(controller_type &controller, const std::vector<double>& positions) {
-    send_cmd(controller, positions, 0.1);
+void BagToCmd::sendCmd(controller_type &controller, const std::vector<double>& positions) {
+    sendCmd(controller, positions, 0.1);
 }
 
-void BagToCmd::send_zero() {
+void BagToCmd::sendZero() {
     std::vector<double> zeroes(joint_to_ndx_.size(), 0.0);
     for (unsigned int i = 0; i < controllers_.size(); i++) {
-        send_cmd(controllers_[i], zeroes, 1);
+        sendCmd(controllers_[i], zeroes, 1);
     }
 }
 
-void BagToCmd::toggle_pause() {
+void BagToCmd::togglePause() {
     if (state_ == RUNNING) {
         state_ = PAUSED;
     } else {
@@ -179,8 +188,12 @@ void BagToCmd::toggle_pause() {
     }
 }
 
-ControllerState BagToCmd::get_state() {
+ControllerState BagToCmd::getState() {
     return state_;
+}
+
+void BagToCmd::setJointStateTopic(std::string topic_name) {
+    joint_state_topic_ = topic_name;
 }
 
 }

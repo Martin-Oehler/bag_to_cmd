@@ -26,17 +26,19 @@ public:
     void stop();
     void deinit();
 
-    void toggle_pause();
-    void send_zero();
+    void togglePause();
+    void sendZero();
 
-    ControllerState get_state();
+    void setJointStateTopic(std::string topic_name);
+
+    ControllerState getState();
 
 private:
     typedef controller_manager_msgs::ListControllers::ResponseType::_controller_type vec_controller_type ;
     typedef vec_controller_type::value_type controller_type ;
 
-    void send_cmd(controller_type& controller, const std::vector<double>& positions);
-    void send_cmd(controller_type& controller, const std::vector<double>& positions, double duration);
+    void sendCmd(controller_type& controller, const std::vector<double>& positions);
+    void sendCmd(controller_type& controller, const std::vector<double>& positions, double duration);
 
     ros::NodeHandle controller_manager_nh_;
     vec_controller_type controllers_;
@@ -49,6 +51,8 @@ private:
 
     unsigned int msg_counter_;
 
+    std::string joint_state_topic_;
+
     ControllerState state_;
 
 };
@@ -56,7 +60,6 @@ private:
 
 /*
 TODO:
-1. Add configuration (namespaces, frequency, topic name)
 2. More exception handling (map access)
 */
 
